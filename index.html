@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Регистрация на интенсив</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>2-дневный интенсив</h1>
+      <p class="subtitle">Заполните форму ниже для регистрации</p>
+    </header>
+    
+    <div class="card" id="payment-form">
+      <div class="form-group">
+        <!-- Поле email убрано -->
+      </div>
+      
+      <div class="form-group">
+        <label for="amount">Сумма оплаты (руб)</label>
+        <input type="number" id="amount" min="1" placeholder="100" required>
+      </div>
+      
+      <div class="payment-info">
+        <p>Вы можете самостоятельно выбрать сумму оплаты за участие в интенсиве.</p>
+      </div>
+      
+      <div class="loader" id="loader">
+        <div class="spinner"></div>
+        <p>Перенаправление на страницу оплаты...</p>
+      </div>
+      
+      <button class="btn btn-block" id="pay-btn">Оплатить</button>
+    </div>
+    
+    <div class="card success-message" id="success-message">
+      <h2>Оплата прошла успешно!</h2>
+      <p>Спасибо за регистрацию на интенсив.</p>
+      <p>Теперь вы можете перейти в наш закрытый Telegram-канал.</p>
+      <a href="#" class="btn" id="telegram-link">Перейти в Telegram</a>
+    </div>
+  </div>
+  
+ <script>
+// Логирование загрузки страницы
+console.log('Страница загружена');
+
+// Получаем элементы
+const payBtn = document.getElementById('pay-btn');
+const amountInput = document.getElementById('amount');
+const loader = document.getElementById('loader');
+const paymentForm = document.getElementById('payment-form');
+const successMessage = document.getElementById('success-message');
+const telegramLink = document.getElementById('telegram-link');
+
+if (payBtn) {
+  payBtn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    console.log('Кнопка оплаты нажата');
+    const amount = amountInput.value;
+    console.log('Введённые данные:', { amount });
+
+    if (!amount || isNaN(amount) || Number(amount) < 1) {
+      alert('Пожалуйста, введите корректную сумму.');
+      console.log('Ошибка: некорректная сумма');
+      return;
+    }
+
+    loader.style.display = 'block';
+    payBtn.disabled = true;
+    try {
+      const response = await fetch('http://localhost:4001/api/payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount })
+      });
+      console.log('Ответ от сервера получен');
+      const data = await response.json();
+      console.log('Данные ответа:', data);
+      if (data.confirmationUrl) {
+        // Сохраняем paymentId в localStorage для success.html
+        localStorage.setItem('paymentId', data.paymentId);
+        window.location.href = data.confirmationUrl;
+      } else {
+        alert('Ошибка при создании платежа: ' + (data.error || 'Неизвестная ошибка'));
+        console.log('Ошибка при создании платежа:', data.error);
+      }
+    } catch (err) {
+      alert('Ошибка при отправке запроса: ' + err.message);
+      console.error('Ошибка при отправке запроса:', err);
+    } finally {
+      loader.style.display = 'none';
+      payBtn.disabled = false;
+    }
+  });
+} else {
+  console.error('Кнопка оплаты не найдена на странице');
+}
+
+// Проверка статуса платежа после возврата с оплаты
+window.addEventListener('DOMContentLoaded', async () => {
+  const paymentId = localStorage.getItem('paymentId');
+  if (paymentId) {
+    try {
+      const response = await fetch(`http://localhost:4001/api/payment/${paymentId}/status`);
+      const data = await response.json();
+      console.log('Статус платежа:', data);
+      if (data.status === 'succeeded' || data.status === 'pending') {
+        document.getElementById('payment-form').style.display = 'none';
+        document.getElementById('success-message').style.display = 'block';
+        if (data.telegramLink) {
+          document.getElementById('telegram-link').href = data.telegramLink;
+        }
+        // Очищаем paymentId, чтобы не показывать успех при следующем визите
+        localStorage.removeItem('paymentId');
+      }
+    } catch (err) {
+      console.error('Ошибка при проверке статуса платежа:', err);
+    }
+  }
+});
+</script>
+</body>
+</html>
+
